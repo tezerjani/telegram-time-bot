@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: telegram-time-bot
+    env: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /healthz
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        value: "8405331891"
+      - key: TIMEZONE
+        value: "Asia/Tehran"
+      - key: PORT
+        value: "8000"
