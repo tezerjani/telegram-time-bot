@@ -176,17 +176,20 @@ async def parse_tasks_from_voice(
 # ---------------------------------------------------------------------------
 
 _WEEKLY_SCHEMA_PROMPT = """\
-Analyze this schedule/timetable (can be Persian or English, university class routine, work hours, or weekly calendar).
-Identify all recurring/fixed classes, work blocks, or activities.
-Return ONLY a valid JSON array where each object has:
-- "day_of_week": integer (0=Saturday/شنبه, 1=Sunday/یکشنبه, 2=Monday/دوشنبه, 3=Tuesday/سه‌شنبه, 4=Wednesday/چهارشنبه, 5=Thursday/پنجشنبه, 6=Friday/جمعه)
-- "task_name": string (course name, job title, etc.)
-- "emoji": string (e.g. 🎓 or 📚 for class/university, 💼 for work, 🏢 for office, 🚗 for commute, 🥋 for sport)
-- "anchor_start": string "HH:MM" (e.g. "08:00")
-- "anchor_end": string "HH:MM" (e.g. "10:00")
-- "estimated_minutes": integer (duration in minutes)
+استخراج جدول هفتگی و برنامه کلاسی/دانشگاهی یا کاری:
+ستون‌ها نشان‌دهنده روزهای هفته (شنبه، یکشنبه، دوشنبه، سه‌شنبه، چهارشنبه، پنج‌شنبه، جمعه) و سطرها نشان‌دهنده درس‌ها یا کارها هستند.
+در هر خانه ساعت کلاس (مانند 15:00-16:30 یا 08:00-09:30 یا 13:00-14:30) همراه با نام محل کلاس یا حل تمرین نوشته شده است.
+یک درس ممکن است در چندین روز جلسه داشته باشد.
+تمام جلسات را به صورت آرایه JSON استخراج کن:
+- "day_of_week": عدد 0 تا 6 (0=شنبه, 1=یکشنبه, 2=دوشنبه, 3=سه‌شنبه, 4=چهارشنبه, 5=پنجشنبه, 6=جمعه)
+- "task_name": نام کامل درس یا فعالیت
+- "emoji": ایموجی مرتبط (🎓, 💻, 🔬, 📚, 🏃, 🧪, 💼)
+- "anchor_start": ساعت شروع دقیق به فرمت HH:MM (مثلا "08:00")
+- "anchor_end": ساعت پایان دقیق به فرمت HH:MM (مثلا "09:30")
+- "estimated_minutes": مدت به دقیقه (عدد صحیح)
 - "is_anchor": true
-- "cognitive_load": "high", "medium", or "low"
+- "cognitive_load": "high", "medium" یا "low"
+فقط JSON خالص برگردان بدون توضیحات اضافی.
 """
 
 async def parse_weekly_schedule_from_image(

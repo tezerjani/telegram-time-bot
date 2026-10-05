@@ -16,8 +16,7 @@ ADMIN_ID = int(ADMIN_ID_STR) if ADMIN_ID_STR and ADMIN_ID_STR.isdigit() else Non
 TIMEZONE = os.getenv('TIMEZONE', 'Asia/Tehran')
 PORT = int(os.getenv('PORT', 8000))
 
-# Global Constants
-GEMINI_MODEL = 'gemini-2.5-flash'
+GEMINI_MODEL = 'gemini-flash-latest'
 MAX_RETRIES = 5
 BASE_BACKOFF = 1.0
 MAX_BACKOFF = 60.0
