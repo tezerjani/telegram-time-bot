@@ -120,8 +120,14 @@ def schedule_auto(
     6. Return list of tasks with scheduled_start and scheduled_end fields added.
     """
     def time_to_mins(t_str):
-        h, m = map(int, t_str.split(':'))
-        return h * 60 + m
+        if not t_str:
+            return 0
+        import duration_parser
+        norm = duration_parser.normalize_time_str(t_str)
+        if norm:
+            h, m = map(int, norm.split(':'))
+            return h * 60 + m
+        return 0
         
     def mins_to_time(mins):
         h = (mins // 60) % 24

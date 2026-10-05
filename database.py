@@ -409,6 +409,10 @@ async def clear_weekly_day(user_id: int, day: int) -> None:
     sql = "DELETE FROM weekly_schedules WHERE user_id = ? AND day_of_week = ?"
     await execute(sql, [user_id, day])
 
+async def clear_all_weekly_schedule(user_id: int) -> None:
+    sql = "DELETE FROM weekly_schedules WHERE user_id = ?"
+    await execute(sql, [user_id])
+
 # --- Badge & journal functions ---
 
 async def award_badge(user_id: int, badge_type: str) -> None:

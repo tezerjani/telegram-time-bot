@@ -1,6 +1,7 @@
 """
 NLP Engine — Gemini 2.5 Flash AI client with full exponential backoff retry.
 All Gemini API calls are async via asyncio.to_thread and wrapped with tenacity retry.
+Includes Multimodal Image and Audio processing.
 """
 
 import asyncio
@@ -71,7 +72,6 @@ def _safe_parse_json(raw: str) -> list[dict]:
     Gemini sometimes wraps JSON in markdown fences — strip them first.
     """
     text = raw.strip()
-    # Strip ```json ... ``` or ``` ... ``` fences
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     try:
@@ -95,9 +95,9 @@ Return ONLY a valid JSON array (no markdown, no explanations).
 Each element must have exactly these keys:
 - "task_name": string — task description
 - "emoji": string — ONLY assign if highly obvious match:
-    👨🏻‍💻 coding/programming, 📚 reading/study, 🏃🏻‍♂️ running/cardio,
+    👨🏻‍💻 coding/programming, 📚 reading/study/university, 🏃🏻‍♂️ running/cardio,
     🎯 goals/planning, 💪 gym/workout, 🍽️ eating/meal, 😴 sleep,
-    🚿 shower/hygiene, 📝 writing, 📞 call/meeting.
+    🚿 shower/hygiene, 📝 writing, 📞 call/meeting, 💼 work/job.
     Use "" (empty string) if no clear match.
 - "estimated_minutes": integer — default 60 if not specified
 - "is_anchor": boolean — true only if user specifies a fixed/exact time
@@ -110,16 +110,13 @@ Each element must have exactly these keys:
 async def parse_tasks_from_text(
     text: str, wake_time: str = "07:00", sleep_time: str = "23:00"
 ) -> list[dict]:
-    """
-    Parse a bulk Persian/English task text into structured task dicts.
-    Returns list of task dicts ready for the scheduler.
-    """
+    """Parse a bulk Persian/English task text into structured task dicts."""
     prompt = f"""{_TASK_SCHEMA_PROMPT}
 
 Context:
 - Wake time: {wake_time}
 - Sleep time: {sleep_time}
-- Text to parse (may be Persian, English, or mixed):
+- Text to parse:
 
 {text}
 """
@@ -139,10 +136,7 @@ Context:
 async def parse_tasks_from_voice(
     audio_bytes: bytes, mime_type: str = "audio/ogg; codecs=opus"
 ) -> list[dict]:
-    """
-    Parse tasks from a voice note (audio bytes).
-    Falls back to audio/ogg if the primary mime_type is rejected.
-    """
+    """Parse tasks from a voice note (audio bytes)."""
     audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
     prompt_text = (
         f"{_TASK_SCHEMA_PROMPT}\n\n"
@@ -178,6 +172,84 @@ async def parse_tasks_from_voice(
 
 
 # ---------------------------------------------------------------------------
+# Multimodal — Image Parsing (Schedule, Class Timetable, Handwritten Notes)
+# ---------------------------------------------------------------------------
+
+_WEEKLY_SCHEMA_PROMPT = """\
+Analyze this schedule/timetable (can be Persian or English, university class routine, work hours, or weekly calendar).
+Identify all recurring/fixed classes, work blocks, or activities.
+Return ONLY a valid JSON array where each object has:
+- "day_of_week": integer (0=Saturday/شنبه, 1=Sunday/یکشنبه, 2=Monday/دوشنبه, 3=Tuesday/سه‌شنبه, 4=Wednesday/چهارشنبه, 5=Thursday/پنجشنبه, 6=Friday/جمعه)
+- "task_name": string (course name, job title, etc.)
+- "emoji": string (e.g. 🎓 or 📚 for class/university, 💼 for work, 🏢 for office, 🚗 for commute, 🥋 for sport)
+- "anchor_start": string "HH:MM" (e.g. "08:00")
+- "anchor_end": string "HH:MM" (e.g. "10:00")
+- "estimated_minutes": integer (duration in minutes)
+- "is_anchor": true
+- "cognitive_load": "high", "medium", or "low"
+"""
+
+async def parse_weekly_schedule_from_image(
+    image_bytes: bytes, mime_type: str = "image/jpeg"
+) -> list[dict]:
+    """Extract recurring weekly classes/work schedule from an image using Gemini 2.5 Flash."""
+    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
+    contents = [
+        {
+            "parts": [
+                {"inline_data": {"mime_type": mime_type, "data": img_b64}},
+                {"text": _WEEKLY_SCHEMA_PROMPT},
+            ]
+        }
+    ]
+    generation_config = genai.GenerationConfig(response_mime_type="application/json")
+    try:
+        raw = await _call_gemini(contents, generation_config=generation_config)
+        return _safe_parse_json(raw)
+    except Exception as exc:
+        logger.error("parse_weekly_schedule_from_image failed: %s", exc)
+        return []
+
+
+async def parse_weekly_schedule_from_text(text: str) -> list[dict]:
+    """Parse natural language weekly routine like 'شنبه و دوشنبه ۸ تا ۱۲ دانشگاه'."""
+    prompt = f"""{_WEEKLY_SCHEMA_PROMPT}
+
+Text description from user:
+{text}
+"""
+    generation_config = genai.GenerationConfig(response_mime_type="application/json")
+    try:
+        raw = await _call_gemini(prompt, generation_config=generation_config)
+        return _safe_parse_json(raw)
+    except Exception as exc:
+        logger.error("parse_weekly_schedule_from_text failed: %s", exc)
+        return []
+
+
+async def parse_tasks_from_image(
+    image_bytes: bytes, mime_type: str = "image/jpeg"
+) -> list[dict]:
+    """Extract daily todo list tasks from a photo of a whiteboard, notebook, or screen."""
+    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
+    contents = [
+        {
+            "parts": [
+                {"inline_data": {"mime_type": mime_type, "data": img_b64}},
+                {"text": f"{_TASK_SCHEMA_PROMPT}\nExtract all task items from this handwritten/printed todo list."},
+            ]
+        }
+    ]
+    generation_config = genai.GenerationConfig(response_mime_type="application/json")
+    try:
+        raw = await _call_gemini(contents, generation_config=generation_config)
+        return _safe_parse_json(raw)
+    except Exception as exc:
+        logger.error("parse_tasks_from_image failed: %s", exc)
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Simple transcription
 # ---------------------------------------------------------------------------
 
@@ -191,11 +263,7 @@ async def transcribe_audio(
             "parts": [
                 {"inline_data": {"mime_type": mime_type, "data": audio_b64}},
                 {
-                    "text": (
-                        "Transcribe the audio accurately. "
-                        "The language may be Persian or English or mixed. "
-                        "Return only the transcription text."
-                    )
+                    "text": "Transcribe the audio accurately. Return only the transcription text."
                 },
             ]
         }
@@ -220,10 +288,7 @@ async def generate_productivity_insight(
     streak: int,
     journal_note: str = "",
 ) -> str:
-    """
-    Generate a short motivational Persian message (2-3 sentences)
-    based on the user's daily productivity data.
-    """
+    """Generate a short motivational Persian message."""
     prompt = f"""\
 شما یک دستیار انگیزشی هوشمند هستید. یک پیام کوتاه فارسی (۲ تا ۳ جمله) بنویسید که:
 - برای امتیاز بهره‌وری {score:.0f}% مناسب باشد
@@ -246,10 +311,7 @@ async def generate_productivity_insight(
 # ---------------------------------------------------------------------------
 
 async def generate_weekly_summary_insight(week_data: list[dict]) -> str:
-    """
-    Generate a 3-4 sentence Persian weekly summary with encouragement
-    based on the user's daily journal data for the past week.
-    """
+    """Generate a 3-4 sentence Persian weekly summary with encouragement."""
     if not week_data:
         return "داده‌ای برای این هفته یافت نشد."
 

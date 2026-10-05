@@ -158,12 +158,17 @@ async def build_application() -> Application:
     app.add_handler(CommandHandler('badges', analytics_handlers.badges_command))
     app.add_handler(CommandHandler('mystats', analytics_handlers.my_stats_command))
 
-    # Voice message handler
+    # Voice & Photo message handlers
     app.add_handler(MessageHandler(filters.VOICE, plan_handlers.voice_message_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, plan_handlers.photo_message_handler))
 
-    # Weekly commands
+    # Weekly commands & callbacks
     app.add_handler(CommandHandler('weekly_view', weekly_handlers.view_weekly_grid))
     app.add_handler(CommandHandler('apply_weekly', weekly_handlers.apply_weekly_to_today))
+    app.add_handler(CommandHandler('set_term', weekly_handlers.set_term_text_command))
+    app.add_handler(CallbackQueryHandler(weekly_handlers.clear_all_weekly_callback, pattern='^clear_all_weekly$'))
+    app.add_handler(CallbackQueryHandler(plan_handlers.confirm_bulk_plan, pattern='^confirm_bulk$'))
+    app.add_handler(CallbackQueryHandler(plan_handlers.cancel_planning, pattern='^cancel_bulk$'))
 
     # Register JobQueue jobs
     if app.job_queue:

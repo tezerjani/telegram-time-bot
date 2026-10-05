@@ -35,10 +35,18 @@ async def weekly_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         text = f"{day_name} ({task_count} وظیفه)"
         keyboard.append([InlineKeyboardButton(text, callback_data=f'week_day:{day_idx}')])
     
+    keyboard.append([InlineKeyboardButton("🗑 پاک‌سازی کل برنامه هفتگی (ریست ترم)", callback_data='clear_all_weekly')])
     keyboard.append([InlineKeyboardButton("بازگشت", callback_data='cancel_weekly')])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("روز مورد نظر خود را برای برنامه‌ریزی هفتگی انتخاب کنید:", reply_markup=reply_markup)
+    await update.message.reply_text(
+        "📅 *مدیریت برنامه هفتگی و زمان‌های قفل‌شده:*\n\n"
+        "▫️ روز مورد نظر را برای تنظیم یا مشاهده انتخاب کنید.\n"
+        "▫️ یا می‌توانید مستقیماً **عکس برنامه درسی/کاری** خود را بفرستید تا خودکار ثبت شود!\n"
+        "▫️ همچنین می‌توانید با دستور `/set_term` متن برنامه خود را یکجا بنویسید.",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
     return SELECTING_DAY
 
 async def select_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -273,3 +281,46 @@ async def apply_weekly_to_today(update: Update, context: ContextTypes.DEFAULT_TY
         await database.add_task(user_id, task, today_date_str)
         
     await update.message.reply_text(f"وظایف هفتگی مربوط به {DAY_NAMES[weekday]} به برنامه امروز اضافه شد و برنامه‌ریزی خودکار اعمال گردید.")
+
+
+async def clear_all_weekly_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    await database.clear_all_weekly_schedule(user_id)
+    await query.edit_message_text("🗑 برنامه کل هفته و ترم با موفقیت پاک‌سازی شد. اکنون می‌توانید برنامه جدید وارد کنید.")
+
+
+async def set_term_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Natural language weekly plan input e.g. /set_term شنبه‌ها ۸ تا ۱۲ دانشگاه..."""
+    text = update.message.text
+    if text.startswith('/set_term'):
+        text = text[9:].strip()
+        
+    if not text:
+        await update.message.reply_text(
+            "لطفاً برنامه هفتگی خود را جلوی دستور بنویسید:\n"
+            "مثال:\n"
+            "`/set_term شنبه‌ها ۸ تا ۱۲ کلاس ریاضی، دوشنبه‌ها ۹ تا ۱۷ سر کار`",
+            parse_mode="Markdown"
+        )
+        return
+        
+    msg = await update.message.reply_text("🧠 در حال استخراج و قفل کردن زمان‌های ثابت هفتگی با هوش مصنوعی...")
+    weekly_items = await nlp_engine.parse_weekly_schedule_from_text(text)
+    
+    if not weekly_items:
+        await msg.edit_text("نتوانستم روزها و ساعت‌ها را به درستی تشخیص دهم. لطفاً روزها و ساعت‌ها را مشخص‌تر بنویسید.")
+        return
+        
+    user_id = update.effective_user.id
+    for item in weekly_items:
+        day = item.get("day_of_week", 0)
+        await database.add_weekly_task(user_id, day, item)
+        
+    lines = [f"▫️ {DAY_NAMES.get(i.get('day_of_week', 0), '')}: {i.get('emoji','')} {i.get('task_name')} ({i.get('anchor_start')} تا {i.get('anchor_end')})" for i in weekly_items]
+    await msg.edit_text(
+        f"✅ برنامه ثابت هفتگی شما با موفقیت قفل شد:\n\n" + "\n".join(lines) + "\n\n"
+        f"از این پس هر زمان برنامه‌ریزی روزانه انجام دهید، این زمان‌ها به عنوان زمان‌های ثابت حفظ می‌شوند."
+    )
+

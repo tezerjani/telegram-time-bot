@@ -9,6 +9,46 @@ PERSIAN_WORD_NUMBERS = {
     'بیست': 20, 'سی': 30, 'چهل': 40, 'پنجاه': 50, 'شصت': 60
 }
 
+def normalize_time_str(t_str: str) -> str | None:
+    """Normalize any time string (e.g. '14', '9', '14:30', '۰۸:۰۰') to 'HH:MM'."""
+    if not t_str:
+        return None
+    t = str(t_str).translate(PERSIAN_DIGITS).strip()
+    
+    # Check HH:MM
+    m = re.match(r'^(\d{1,2}):(\d{1,2})$', t)
+    if m:
+        h, mn = int(m.group(1)), int(m.group(2))
+        if 0 <= h <= 24 and 0 <= mn < 60:
+            return f"{h:02d}:{mn:02d}"
+            
+    # Check pure hour (e.g. '14' or '9')
+    m = re.match(r'^(\d{1,2})$', t)
+    if m:
+        h = int(m.group(1))
+        if 0 <= h <= 24:
+            return f"{h:02d}:00"
+            
+    return None
+
+def parse_time_range(text: str) -> tuple[str, str] | None:
+    """
+    Parse any range string like:
+    '14 - 16', '09:00 تا 11:30', '۸ الی ۱۰', '14:00-15:30'
+    Returns ('HH:MM', 'HH:MM') or None.
+    """
+    if not text:
+        return None
+    raw = text.translate(PERSIAN_DIGITS).strip()
+    # Normalize separators: hyphen, en-dash, em-dash, 'تا', 'الی', 'to'
+    parts = re.split(r'[-–—]|(?:\s+(?:تا|الی|to)\s+)', raw)
+    if len(parts) == 2:
+        start = normalize_time_str(parts[0])
+        end = normalize_time_str(parts[1])
+        if start and end:
+            return (start, end)
+    return None
+
 def parse_duration_to_minutes(text: str) -> int | None:
     text = text.translate(PERSIAN_DIGITS).strip().lower()
     
