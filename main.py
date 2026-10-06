@@ -159,8 +159,8 @@ async def build_application() -> Application:
     app.add_handler(CommandHandler('mystats', analytics_handlers.my_stats_command))
 
     # Voice & Photo message handlers
-    app.add_handler(MessageHandler(filters.VOICE, plan_handlers.voice_message_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, plan_handlers.photo_message_handler))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.Document.AUDIO, plan_handlers.voice_message_handler))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, plan_handlers.photo_message_handler))
 
     # Weekly commands & callbacks
     app.add_handler(CommandHandler('weekly_view', weekly_handlers.view_weekly_grid))
@@ -193,6 +193,27 @@ async def main() -> None:
     
     async with app:
         await app.start()
+        
+        # Set bot commands for the UI menu
+        from telegram import BotCommand
+        commands = [
+            BotCommand("start", "شروع و مشاهده دستورات"),
+            BotCommand("plan", "برنامه‌ریزی هوشمند روزانه"),
+            BotCommand("deck", "دک کنترل زنده (وضعیت فعلی)"),
+            BotCommand("review", "بررسی و یادداشت شبانه"),
+            BotCommand("weekly", "مدیریت برنامه هفتگی"),
+            BotCommand("weekly_view", "مشاهده تصویر برنامه هفتگی"),
+            BotCommand("mystats", "آمار کلی من"),
+            BotCommand("badges", "افتخارات من"),
+            BotCommand("stats_week", "گزارش هفتگی"),
+            BotCommand("stats_month", "گزارش ماهانه"),
+            BotCommand("cancel", "لغو عملیات فعلی")
+        ]
+        try:
+            await app.bot.set_my_commands(commands)
+        except Exception as e:
+            logger.warning(f"Failed to set bot commands: {e}")
+
         await app.updater.start_polling(drop_pending_updates=True)
         logger.info('Bot started successfully')
         

@@ -29,37 +29,59 @@ logger = logging.getLogger(__name__)
 _model: Optional[genai.GenerativeModel] = None
 
 
-def _get_model() -> genai.GenerativeModel:
-    """Return (and lazily initialize) the Gemini model."""
-    global _model
-    if _model is None:
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        _model = genai.GenerativeModel(config.GEMINI_MODEL)
-    return _model
+_configured = False
 
+FALLBACK_MODELS = [
+    config.GEMINI_MODEL,  # Usually gemini-flash-latest or gemini-3.8-flash
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-pro-latest"
+]
+
+def _ensure_configured():
+    global _configured
+    if not _configured:
+        genai.configure(api_key=config.GEMINI_API_KEY)
+        _configured = True
 
 # ---------------------------------------------------------------------------
-# Retry-wrapped Gemini call
+# Retry-wrapped Gemini call with Model Fallback
 # ---------------------------------------------------------------------------
 
 @retry(
     retry=retry_if_exception_type(Exception),
     wait=wait_exponential(multiplier=config.BASE_BACKOFF, min=1, max=config.MAX_BACKOFF)
     + wait_random(0, 2),
-    stop=stop_after_attempt(config.MAX_RETRIES),
+    stop=stop_after_attempt(3), # Reduced to 3 outer retries
     reraise=True,
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
 async def _call_gemini(contents, generation_config=None) -> str:
-    """Execute a Gemini generate_content call in a thread pool with retry."""
-    model = _get_model()
-    if generation_config is not None:
-        response = await asyncio.to_thread(
-            model.generate_content, contents, generation_config=generation_config
-        )
-    else:
-        response = await asyncio.to_thread(model.generate_content, contents)
-    return response.text
+    """Execute a Gemini generate_content call in a thread pool with retry and model fallback."""
+    _ensure_configured()
+    
+    last_exc = None
+    for model_name in FALLBACK_MODELS:
+        try:
+            model = genai.GenerativeModel(model_name)
+            if generation_config is not None:
+                response = await asyncio.to_thread(
+                    model.generate_content, contents, generation_config=generation_config, request_options={"timeout": 30}
+                )
+            else:
+                response = await asyncio.to_thread(model.generate_content, contents, request_options={"timeout": 30})
+            
+            logger.info("Successfully generated content using model: %s", model_name)
+            return response.text
+        except Exception as exc:
+            err_msg = str(exc).split('\n')[0][:100]
+            logger.warning("Model %s failed: %s", model_name, err_msg)
+            last_exc = exc
+            
+    # If all models fail, raise the last exception to trigger tenacity retry
+    raise last_exc
 
 
 # ---------------------------------------------------------------------------
@@ -177,18 +199,18 @@ async def parse_tasks_from_voice(
 
 _WEEKLY_SCHEMA_PROMPT = """\
 استخراج جدول هفتگی و برنامه کلاسی/دانشگاهی یا کاری:
-ستون‌ها نشان‌دهنده روزهای هفته (شنبه، یکشنبه، دوشنبه، سه‌شنبه، چهارشنبه، پنج‌شنبه، جمعه) و سطرها نشان‌دهنده درس‌ها یا کارها هستند.
-در هر خانه ساعت کلاس (مانند 15:00-16:30 یا 08:00-09:30 یا 13:00-14:30) همراه با نام محل کلاس یا حل تمرین نوشته شده است.
-یک درس ممکن است در چندین روز جلسه داشته باشد.
-تمام جلسات را به صورت آرایه JSON استخراج کن:
+کاربر تصویری از یک برنامه هفتگی (مانند سیستم گلستان دانشگاه یا مدرسه) ارسال کرده است.
+در این جداول معمولاً یک محور (سطر یا ستون) روزهای هفته و محور دیگر بازه‌های زمانی (مثل 08:00-10:00) است. تقاطع آن‌ها نام درس را مشخص می‌کند.
+گاهی یک درس در چندین روز یا ساعت مختلف برگزار می‌شود. تمام جلسات را پیدا کن.
+خروجی باید دقیقاً یک آرایه JSON با ساختار زیر باشد:
 - "day_of_week": عدد 0 تا 6 (0=شنبه, 1=یکشنبه, 2=دوشنبه, 3=سه‌شنبه, 4=چهارشنبه, 5=پنجشنبه, 6=جمعه)
-- "task_name": نام کامل درس یا فعالیت
+- "task_name": نام کامل درس یا فعالیت (بدون کلمات اضافی)
 - "emoji": ایموجی مرتبط (🎓, 💻, 🔬, 📚, 🏃, 🧪, 💼)
 - "anchor_start": ساعت شروع دقیق به فرمت HH:MM (مثلا "08:00")
-- "anchor_end": ساعت پایان دقیق به فرمت HH:MM (مثلا "09:30")
-- "estimated_minutes": مدت به دقیقه (عدد صحیح)
+- "anchor_end": ساعت پایان دقیق به فرمت HH:MM (مثلا "10:00")
+- "estimated_minutes": مدت کلاس به دقیقه (عدد صحیح)
 - "is_anchor": true
-- "cognitive_load": "high", "medium" یا "low"
+- "cognitive_load": "high"
 فقط JSON خالص برگردان بدون توضیحات اضافی.
 """
 

@@ -22,14 +22,16 @@ import config
 logger = logging.getLogger(__name__)
 
 # Constants
-OVERLAY_OPACITY = 178       # ~70% dark overlay
+OVERLAY_OPACITY = 140       # ~55% dark overlay (lighter to show the beautiful background)
 POSTER_SIZE = (1080, 1350)  # 4:5 ratio
 WEEKLY_SIZE = (1920, 1080)  # 16:9 ratio
-ACCENT_COLOR = (255, 200, 80)    # golden yellow
-TEXT_COLOR = (240, 240, 240)      # near-white
-SECONDARY_COLOR = (180, 180, 180) # light gray
-BG_FALLBACK_COLOR = (15, 15, 25)  # dark navy
-HEADER_COLOR = (255, 200, 80)
+ACCENT_COLOR = (255, 170, 90)     # warm copper/gold
+TEXT_COLOR = (245, 240, 235)      # warm near-white
+SECONDARY_COLOR = (190, 175, 160) # warm light gray
+BG_FALLBACK_COLOR = (25, 15, 10)  # dark brown/copper fallback
+HEADER_COLOR = (255, 170, 90)     # warm copper/gold
+GRID_LINE_COLOR = (255, 170, 90, 80) # Semi-transparent copper for grid lines
+CARD_BG_COLOR = (20, 10, 5, 180)  # warm dark overlay for cards
 
 _PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
@@ -96,7 +98,7 @@ def generate_daily_poster(
     Returns PNG bytes.
     """
     img = load_background(POSTER_SIZE)
-    img = apply_dark_overlay(img)
+    img = apply_dark_overlay(img, opacity=0)
     draw = ImageDraw.Draw(img)
 
     title_font = load_font(60)
@@ -127,56 +129,68 @@ def generate_daily_poster(
 
     # 2. Table Column Headers (y=190)
     y_offset = 190
-    draw.line([(80, y_offset + 35), (POSTER_SIZE[0] - 80, y_offset + 35)], fill=SECONDARY_COLOR, width=2)
+    draw.rectangle([60, y_offset - 10, POSTER_SIZE[0] - 60, y_offset + 45], fill=None, outline=ACCENT_COLOR, width=2)
 
-    col_time = reshape_text("TIME")
-    col_task = reshape_text("وظیفه / پارت")
-    col_dur = reshape_text("مدت")
+    col_time = reshape_text("TIME / ساعت")
+    col_task = reshape_text("TASK / پارت / وظیفه")
+    col_dur = reshape_text("DUR / مدت")
 
-    draw.text((80, y_offset), col_time, font=small_font, fill=SECONDARY_COLOR)
-    draw.text((230, y_offset), col_task, font=small_font, fill=SECONDARY_COLOR)
-    draw.text((POSTER_SIZE[0] - 180, y_offset), col_dur, font=small_font, fill=SECONDARY_COLOR)
+    draw.text((80, y_offset), col_time, font=small_font, fill=ACCENT_COLOR)
+    draw.text((320, y_offset), col_task, font=small_font, fill=ACCENT_COLOR)
+    draw.text((POSTER_SIZE[0] - 180, y_offset), col_dur, font=small_font, fill=ACCENT_COLOR)
 
     # 3. Task Rows (y=245)
     y_offset = 245
     total_minutes = 0
-    row_height = 80
+    row_height = 85
 
-    for task in tasks:
+    for i, task in enumerate(tasks):
         is_break = task.get("is_break", False)
         t_color = SECONDARY_COLOR if is_break else TEXT_COLOR
+
+        # No background fill for rows
+        draw.rectangle([60, y_offset - 5, POSTER_SIZE[0] - 60, y_offset + row_height - 5], fill=None)
+        
+        # Bottom border for row
+        draw.line([(60, y_offset + row_height - 5), (POSTER_SIZE[0] - 60, y_offset + row_height - 5)], fill=GRID_LINE_COLOR, width=1)
 
         # Scheduled Time
         start_time = task.get("scheduled_start") or "--:--"
         end_time = task.get("scheduled_end") or ""
         time_display = f"{start_time} - {end_time}" if end_time else start_time
         draw.text(
-            (80, y_offset),
+            (80, y_offset + 15),
             _to_persian(time_display),
             font=normal_font,
-            fill=SECONDARY_COLOR if is_break else ACCENT_COLOR,
+            fill=SECONDARY_COLOR if is_break else HEADER_COLOR,
         )
+
+        # Vertical separator line
+        draw.line([(290, y_offset), (290, y_offset + row_height - 10)], fill=GRID_LINE_COLOR, width=1)
 
         # Emoji + Task Name
         emoji = task.get("emoji") or ("☕" if is_break else "🔹")
         raw_name = task.get("task_name") or task.get("name") or ("استراحت" if is_break else "وظیفه")
         task_label = reshape_text(f"{emoji} {raw_name}")
-        draw.text((230, y_offset), task_label, font=normal_font, fill=t_color)
+        draw.text((320, y_offset + 15), task_label, font=normal_font, fill=t_color)
+
+        # Vertical separator line
+        draw.line([(POSTER_SIZE[0] - 210, y_offset), (POSTER_SIZE[0] - 210, y_offset + row_height - 10)], fill=GRID_LINE_COLOR, width=1)
 
         # Duration
         dur = task.get("estimated_minutes") or task.get("duration") or task.get("duration_minutes") or 0
         if not is_break:
             total_minutes += dur
         dur_str = f"{_to_persian(str(dur))}د" if dur > 0 else ""
-        draw.text((POSTER_SIZE[0] - 180, y_offset), reshape_text(dur_str), font=normal_font, fill=SECONDARY_COLOR)
+        draw.text((POSTER_SIZE[0] - 180, y_offset + 15), reshape_text(dur_str), font=normal_font, fill=SECONDARY_COLOR)
 
         y_offset += row_height
-        if y_offset > POSTER_SIZE[1] - 160:
+        if y_offset > POSTER_SIZE[1] - 180:
             break
 
     # 4. Footer
-    footer_y = POSTER_SIZE[1] - 110
-    draw.line([(80, footer_y - 20), (POSTER_SIZE[0] - 80, footer_y - 20)], fill=SECONDARY_COLOR, width=2)
+    footer_y = POSTER_SIZE[1] - 120
+    draw.rectangle([60, footer_y - 15, POSTER_SIZE[0] - 60, footer_y + 45], fill=None, outline=ACCENT_COLOR, width=2)
 
     total_h = total_minutes // 60
     total_m = total_minutes % 60
@@ -191,6 +205,8 @@ def generate_daily_poster(
     return out.getvalue()
 
 
+import datetime
+
 def generate_weekly_grid(
     weekly_data: dict[int, list[dict]],
     user_name: str,
@@ -201,43 +217,90 @@ def generate_weekly_grid(
     Returns PNG bytes.
     """
     img = load_background(WEEKLY_SIZE)
-    img = apply_dark_overlay(img, opacity=200)
+    # The user requested ABSOLUTELY NO dark overlay, so we set opacity to 0 or very low (just 20 for slight contrast if needed, but 0 is what they asked)
+    img = apply_dark_overlay(img, opacity=0) 
     draw = ImageDraw.Draw(img)
 
-    title_font = load_font(60)
-    subtitle_font = load_font(30)
+    title_font = load_font(35)
+    subtitle_font = load_font(20)
     normal_font = load_font(20)
     small_font = load_font(16)
+    tiny_font = load_font(18)
 
-    # Title
+    # Bot ID top right
+    bot_id = "@VoltaTaskBot"
+    try:
+        bw = draw.textlength(bot_id, font=tiny_font)
+    except Exception:
+        bw = 100
+    draw.text((WEEKLY_SIZE[0] - bw - 40, 20), bot_id, font=tiny_font, fill=SECONDARY_COLOR)
+
+    # Date info
+    date_str = ""
+    try:
+        import jdatetime
+        today = jdatetime.date.today()
+        sat = today - jdatetime.timedelta(days=today.weekday())
+        fri = sat + jdatetime.timedelta(days=6)
+        date_str = f"از {sat.day} {sat.j_months_fa[sat.month-1]} تا {fri.day} {fri.j_months_fa[fri.month-1]} {fri.year}"
+        date_str = _to_persian(date_str)
+    except Exception:
+        date_str = _to_persian("هفته جاری")
+
+    # Title (Top Left)
     title_text = reshape_text("برنامه هفتگی")
-    try:
-        tw = draw.textlength(title_text, font=title_font)
-    except Exception:
-        tw = 200
-    draw.text(((WEEKLY_SIZE[0] - tw) // 2, 35), title_text, font=title_font, fill=ACCENT_COLOR)
+    draw.text((30, 20), title_text, font=title_font, fill=ACCENT_COLOR)
 
-    user_text = reshape_text(user_name)
-    try:
-        uw = draw.textlength(user_text, font=subtitle_font)
-    except Exception:
-        uw = 150
-    draw.text(((WEEKLY_SIZE[0] - uw) // 2, 105), user_text, font=subtitle_font, fill=TEXT_COLOR)
+    # Subtitle (Date Info - Top Left under Title)
+    date_text = reshape_text(date_str)
+    draw.text((30, 65), date_text, font=subtitle_font, fill=TEXT_COLOR)
 
     # 7 Days: Saturday=0 to Friday=6
     days = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه"]
-    margin_x = 40
-    avail_w = WEEKLY_SIZE[0] - (2 * margin_x)
+    margin_x = 70  # Shifted slightly right to give hour text more room
+    avail_w = WEEKLY_SIZE[0] - margin_x - 30
     col_w = avail_w // 7
-    start_y = 175
-    col_bottom = WEEKLY_SIZE[1] - 50
+    start_y = 100  # Shifted up to give more room for the grid
+    col_bottom = WEEKLY_SIZE[1] - 30
+    
+    # Draw Main Grid Boundary (Completely Transparent, NO FILL)
+    draw.rectangle([margin_x, start_y, margin_x + avail_w, col_bottom], fill=None, outline=ACCENT_COLOR, width=3)
+
+    # Draw vertical column lines
+    glass_line_color = (255, 170, 90, 150)
+    for i in range(1, 7):
+        vx = margin_x + i * col_w
+        draw.line([(vx, start_y), (vx, col_bottom)], fill=ACCENT_COLOR, width=2)
+
+    # Header Row Line
+    header_h = 50
+    draw.line([(margin_x, start_y + header_h), (margin_x + avail_w, start_y + header_h)], fill=ACCENT_COLOR, width=2)
+
+    # Fixed Time Range for Dynamic Google Calendar Style (05:00 to 24:00)
+    min_time = 5 * 60
+    max_time = 24 * 60
+    total_mins = max_time - min_time
+    calendar_h = col_bottom - (start_y + header_h)
+
+    def parse_time_mins(t_str):
+        try:
+            h, m = map(int, t_str.split(':'))
+            return h * 60 + m
+        except:
+            return None
+
+    # Draw Hour Lines
+    for h in range(min_time // 60, (max_time // 60) + 1):
+        mins = h * 60
+        y = start_y + header_h + ((mins - min_time) / total_mins) * calendar_h
+        draw.line([(margin_x, y), (margin_x + avail_w, y)], fill=glass_line_color, width=1)
+        
+        # Draw hour text on the left margin
+        hour_str = _to_persian(f"{h:02d}:00")
+        draw.text((15, y - 8), hour_str, font=small_font, fill=ACCENT_COLOR)
 
     for i, day_name in enumerate(days):
         x = margin_x + (i * col_w)
-
-        # Alternating column tint
-        col_bg = (30, 30, 48, 190) if i % 2 == 0 else (20, 20, 36, 190)
-        draw.rectangle([x, start_y, x + col_w - 8, col_bottom], fill=col_bg)
 
         # Day Header
         reshaped_day = reshape_text(day_name)
@@ -245,30 +308,59 @@ def generate_weekly_grid(
             dw = draw.textlength(reshaped_day, font=subtitle_font)
         except Exception:
             dw = 60
-        draw.text((x + (col_w - dw) // 2, start_y + 12), reshaped_day, font=subtitle_font, fill=ACCENT_COLOR)
-        draw.line([(x + 10, start_y + 55), (x + col_w - 18, start_y + 55)], fill=SECONDARY_COLOR, width=1)
+        draw.text((x + (col_w - dw) // 2, start_y + 10), reshaped_day, font=subtitle_font, fill=ACCENT_COLOR)
 
-        # Day Tasks
+        # Day Tasks (Dynamic Blocks)
         tasks = weekly_data.get(i, [])
-        t_y = start_y + 68
-
         for task in tasks:
-            if t_y > col_bottom - 60:
-                draw.text((x + 12, t_y), reshape_text("..."), font=small_font, fill=SECONDARY_COLOR)
-                break
+            s_str = task.get("anchor_start") or task.get("scheduled_start") or ""
+            e_str = task.get("anchor_end") or task.get("scheduled_end") or ""
+            dur = task.get("estimated_minutes") or task.get("duration") or 60
+            
+            start_m = parse_time_mins(s_str)
+            end_m = parse_time_mins(e_str)
+            
+            if start_m is None:
+                continue # Skip if no start time can be determined
+                
+            if end_m is None:
+                end_m = start_m + dur
+
+            task_y = start_y + header_h + ((start_m - min_time) / total_mins) * calendar_h
+            task_h = ((end_m - start_m) / total_mins) * calendar_h
+            
+            # Ensure minimum height for visibility
+            if task_h < 30: task_h = 30
+            
+            # Draw block (slightly more opaque so black text is readable on dark backgrounds)
+            block_color = (255, 170, 90, 140) if not task.get("is_break") else (180, 180, 180, 140)
+            outline_color = ACCENT_COLOR if not task.get("is_break") else SECONDARY_COLOR
+            draw.rounded_rectangle([x + 2, task_y + 2, x + col_w - 2, task_y + task_h - 2], radius=8, fill=block_color, outline=outline_color, width=1)
 
             emoji = task.get("emoji") or "🔹"
             raw_name = task.get("task_name") or task.get("name") or "وظیفه"
-            dur = task.get("estimated_minutes") or task.get("duration") or 0
-
+            
+            # Text fitting
             task_line = reshape_text(f"{emoji} {raw_name}")
-            dur_line = reshape_text(f"{_to_persian(str(dur))}د") if dur else ""
+            try:
+                while draw.textlength(task_line, font=normal_font) > col_w - 15:
+                    if len(raw_name) <= 2: break
+                    raw_name = raw_name[:-2] + "…"
+                    task_line = reshape_text(f"{emoji} {raw_name}")
+            except:
+                pass
 
-            draw.text((x + 12, t_y), task_line, font=normal_font, fill=TEXT_COLOR)
-            if dur_line:
-                draw.text((x + 12, t_y + 26), dur_line, font=small_font, fill=SECONDARY_COLOR)
+            dur_line = reshape_text(_to_persian(f"{s_str} - {e_str}" if e_str else s_str))
 
-            t_y += 62
+            # Draw text if there's enough height - USING BLACK AS REQUESTED
+            task_text_color = (0, 0, 0)
+            task_time_color = (30, 30, 30)
+            
+            if task_h > 45:
+                draw.text((x + 8, task_y + 5), task_line, font=normal_font, fill=task_text_color)
+                draw.text((x + 8, task_y + 28), dur_line, font=small_font, fill=task_time_color)
+            else:
+                draw.text((x + 8, task_y + (task_h - 25)//2), task_line, font=normal_font, fill=task_text_color)
 
     out = io.BytesIO()
     img.save(out, format="PNG")

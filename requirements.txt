@@ -8,3 +8,4 @@ python-bidi==0.6.3
 python-dotenv==1.0.1
 pydub==0.25.1
 httpx==0.27.2
+jdatetime==5.0.0

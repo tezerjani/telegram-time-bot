@@ -63,12 +63,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         await update.message.reply_text(
             f"👑 سلام ادمین عزیز ({full_name})! خوش آمدید.{streak_line}\n\n"
-            "شما دسترسی کامل به تمامی بخش‌های ربات دارید:\n\n"
-            "📅 شروع برنامه‌ریزی امروز: /plan\n"
-            "🎯 دک کنترل زنده: /deck\n"
-            "🌙 بررسی و یادداشت شبانه: /review\n"
-            "📊 آمار و تحلیل: /mystats\n"
-            "⚙️ پنل مدیریت کاربران: /admin"
+            "شما دسترسی کامل به تمامی بخش‌های ربات دارید. لیست کامل دستورات:\n\n"
+            "📝 **برنامه‌ریزی:**\n"
+            "🔹 /plan - برنامه‌ریزی هوشمند روزانه\n"
+            "🔹 /weekly - مدیریت برنامه هفتگی\n"
+            "🔹 /weekly_view - دریافت پوستر هفتگی\n\n"
+            "🎯 **اجرا و بررسی:**\n"
+            "🔹 /deck - دک کنترل زنده (وضعیت فعلی)\n"
+            "🔹 /review - بررسی و یادداشت شبانه\n\n"
+            "📊 **آمار و افتخارات:**\n"
+            "🔹 /mystats - آمار کلی من\n"
+            "🔹 /badges - افتخارات من\n"
+            "🔹 /stats_week - گزارش هفتگی\n"
+            "🔹 /stats_month - گزارش ماهانه\n\n"
+            "⚙️ **مدیریت:**\n"
+            "🔹 /admin - پنل مدیریت کاربران\n"
+            "🔹 /broadcast - ارسال پیام همگانی"
         )
         return
 
@@ -93,9 +103,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             streak_line = f"\n🔥 رکورد فعلی: {streak} روز" if streak > 0 else ""
             await update.message.reply_text(
                 f"🎉 خوش برگشتی، {full_name}!{streak_line}\n\n"
-                "برای شروع برنامه‌ریزی امروز: /plan\n"
-                "مشاهده دک زنده: /deck\n"
-                "بررسی شبانه: /review"
+                "لیست کامل دستورات ربات برای استفاده شما:\n\n"
+                "📝 **برنامه‌ریزی:**\n"
+                "🔹 /plan - برنامه‌ریزی هوشمند روزانه\n"
+                "🔹 /weekly - مدیریت برنامه هفتگی\n"
+                "🔹 /weekly_view - دریافت پوستر هفتگی\n\n"
+                "🎯 **اجرا و بررسی:**\n"
+                "🔹 /deck - دک کنترل زنده (وضعیت فعلی)\n"
+                "🔹 /review - بررسی و یادداشت شبانه\n\n"
+                "📊 **آمار و افتخارات:**\n"
+                "🔹 /mystats - آمار کلی من\n"
+                "🔹 /badges - افتخارات من\n"
+                "🔹 /stats_week - گزارش هفتگی\n"
+                "🔹 /stats_month - گزارش ماهانه"
             )
         elif status == "banned":
             await update.message.reply_text("⛔ متأسفیم، دسترسی شما به ربات مسدود شده است.")
@@ -164,8 +184,19 @@ async def approve_user_callback(update: Update, context: ContextTypes.DEFAULT_TY
             chat_id=user_id,
             text=(
                 "🎉 تبریک! دسترسی شما به ربات تایید شد.\n\n"
-                "اکنون می‌توانید از تمام امکانات استفاده کنید.\n"
-                "برای شروع اولین برنامه‌ریزی: /plan"
+                "لیست کامل دستورات ربات برای استفاده شما:\n\n"
+                "📝 **برنامه‌ریزی:**\n"
+                "🔹 /plan - برنامه‌ریزی هوشمند روزانه\n"
+                "🔹 /weekly - مدیریت برنامه هفتگی\n"
+                "🔹 /weekly_view - دریافت پوستر هفتگی\n\n"
+                "🎯 **اجرا و بررسی:**\n"
+                "🔹 /deck - دک کنترل زنده (وضعیت فعلی)\n"
+                "🔹 /review - بررسی و یادداشت شبانه\n\n"
+                "📊 **آمار و افتخارات:**\n"
+                "🔹 /mystats - آمار کلی من\n"
+                "🔹 /badges - افتخارات من\n"
+                "🔹 /stats_week - گزارش هفتگی\n"
+                "🔹 /stats_month - گزارش ماهانه"
             ),
         )
     except Exception as exc:

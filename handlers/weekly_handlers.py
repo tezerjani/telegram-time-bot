@@ -158,11 +158,15 @@ async def view_weekly_grid(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name or "کاربر"
     full_schedule = await database.get_full_weekly_schedule(user_id)
+    user = await database.get_user(user_id)
+    wake = user.get("wake_time", "07:00") if user else "07:00"
+    sleep = user.get("sleep_time", "23:00") if user else "23:00"
     
     weekly_data = {i: [] for i in range(7)}
-    for t in full_schedule:
-        day_of_week = t.get('day_of_week', 0)
-        weekly_data[day_of_week].append(t)
+    for day_idx in range(7):
+        day_tasks = [t for t in full_schedule if t.get('day_of_week') == day_idx]
+        scheduled_day = scheduler_engine.schedule_auto(day_tasks, wake, sleep, '2023-01-01', config.TIMEZONE)
+        weekly_data[day_idx] = scheduled_day
         
     summary_text = "برنامه کل هفته شما:\n"
     for day_idx in range(7):

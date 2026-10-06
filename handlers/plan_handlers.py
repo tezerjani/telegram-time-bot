@@ -398,43 +398,61 @@ async def voice_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def photo_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle photo intake: whiteboard, timetable, or todo note."""
-    msg = await update.message.reply_text("👁 در حال خواندن تصویر و استخراج برنامه با بینایی هوش مصنوعی...")
-    photo = update.message.photo[-1]
-    photo_file = await photo.get_file()
-    img_bytes = await photo_file.download_as_bytearray()
+    from handlers.auth_handlers import check_authorization
+    if not await check_authorization(update, context):
+        return
+
+    msg = await update.message.reply_text("👁 در حال خواندن تصویر و استخراج برنامه با هوش مصنوعی (این کار ممکن است چند ثانیه طول بکشد)...")
     
-    # Try parsing as weekly schedule first (if it's a timetable grid)
-    weekly_items = await nlp_engine.parse_weekly_schedule_from_image(bytes(img_bytes))
-    if weekly_items and len(weekly_items) >= 2:
-        user_id = update.effective_user.id
-        added = 0
-        for item in weekly_items:
-            day = item.get("day_of_week", 0)
-            await database.add_weekly_task(user_id, day, item)
-            added += 1
+    try:
+        # Check if it's a photo or document
+        if update.message.photo:
+            photo = update.message.photo[-1]
+            photo_file = await photo.get_file()
+        elif update.message.document:
+            photo_file = await update.message.document.get_file()
+        else:
+            await msg.edit_text("لطفاً یک تصویر ارسال کنید.")
+            return
             
-        await msg.edit_text(
-            f"🎓 تصویر برنامه هفتگی/کلاسی تشخیص داده شد!\n"
-            f"✅ تعداد {added} کلاس و کار در برنامه هفتگی شما قفل شد.\n"
-            f"برای مشاهده پوستر کل هفته دستور /weekly_view را بزنید."
-        )
-        return
+        img_bytes = await photo_file.download_as_bytearray()
+        
+        # Try parsing as weekly schedule first (if it's a timetable grid)
+        weekly_items = await nlp_engine.parse_weekly_schedule_from_image(bytes(img_bytes))
+        if weekly_items and len(weekly_items) >= 2:
+            user_id = update.effective_user.id
+            added = 0
+            for item in weekly_items:
+                day = item.get("day_of_week", 0)
+                await database.add_weekly_task(user_id, day, item)
+                added += 1
+                
+            await msg.edit_text(
+                f"🎓 تصویر برنامه کلاسی/هفتگی با موفقیت تشخیص داده شد!\n"
+                f"✅ تعداد {added} کلاس و کار در برنامه شما ثبت شد.\n"
+                f"برای مشاهده پوستر کل هفته، دستور /weekly_view را بزنید."
+            )
+            return
 
-    # Fallback to daily tasks list from photo
-    daily_tasks = await nlp_engine.parse_tasks_from_image(bytes(img_bytes))
-    if daily_tasks:
-        context.user_data['parsed_tasks'] = daily_tasks
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ تایید و زمان‌بندی", callback_data="confirm_bulk"),
-                InlineKeyboardButton("❌ لغو", callback_data="cancel_bulk")
+        # Fallback to daily tasks list from photo
+        daily_tasks = await nlp_engine.parse_tasks_from_image(bytes(img_bytes))
+        if daily_tasks:
+            context.user_data['parsed_tasks'] = daily_tasks
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ تایید و زمان‌بندی", callback_data="confirm_bulk"),
+                    InlineKeyboardButton("❌ لغو", callback_data="cancel_bulk")
+                ]
             ]
-        ]
-        res = "\n".join([f"▫️ {t.get('emoji','')} {t.get('task_name', '')} ({t.get('estimated_minutes', 60)} دقیقه)" for t in daily_tasks])
-        await msg.edit_text(f"📝 *وظایف خوانده شده از عکس:*\n\n{res}\n\nآیا ذخیره و زمان‌بندی شوند؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-        return
+            res = "\n".join([f"▫️ {t.get('emoji','')} {t.get('task_name', '')} ({t.get('estimated_minutes', 60)} دقیقه)" for t in daily_tasks])
+            await msg.edit_text(f"📝 *وظایف خوانده شده از عکس:*\n\n{res}\n\nآیا ذخیره و زمان‌بندی شوند؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            return
 
-    await msg.edit_text("نتوانستم متن یا برنامه‌ای در این تصویر شناسایی کنم. لطفاً تصویر باکیفیت‌تری ارسال کنید.")
+        await msg.edit_text("❌ نتوانستم متن یا برنامه‌ای در این تصویر شناسایی کنم. لطفاً تصویر باکیفیت‌تری ارسال کنید یا آن را مستقیم بنویسید.")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error in photo parsing: {e}")
+        await msg.edit_text("❌ متاسفانه هنگام پردازش تصویر مشکلی پیش آمد.")
 
 
 async def confirm_bulk_plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
