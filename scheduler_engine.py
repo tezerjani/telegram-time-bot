@@ -139,8 +139,19 @@ def schedule_auto(
     if sleep_mins < wake_mins:
         sleep_mins += 24 * 60
         
-    # Start time
+    # Base start time
     current_time = wake_mins + MIN_MORNING_BUFFER
+    
+    # If scheduling for today, don't schedule floating tasks in the past
+    import datetime
+    import zoneinfo
+    tz_obj = zoneinfo.ZoneInfo(tz) if tz else datetime.timezone.utc
+    now = datetime.datetime.now(tz_obj)
+    if date_str == now.strftime('%Y-%m-%d'):
+        now_mins = now.hour * 60 + now.minute
+        # If we are already past the base start time, schedule from now
+        if now_mins > current_time:
+            current_time = now_mins + 5 # Add 5 min buffer from now
     
     anchors = []
     floating = []

@@ -67,13 +67,14 @@ def load_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
 
 
 def load_background(size: tuple[int, int]) -> Image.Image:
-    """Load and resize background image, fallback to dark solid color."""
+    """Load and crop background image to fit the size without squishing, fallback to dark solid color."""
+    from PIL import ImageOps
     bg_path = getattr(config, "DAILY_POSTER_BG", "assets/background.jpg")
     try:
         p = pathlib.Path(bg_path)
         if p.exists() and p.stat().st_size > 1000:
             img = Image.open(str(p)).convert("RGBA")
-            return img.resize(size, Image.Resampling.LANCZOS)
+            return ImageOps.fit(img, size, Image.Resampling.LANCZOS)
     except Exception as e:
         logger.warning("Could not load background from %s: %s", bg_path, e)
     return Image.new("RGBA", size, BG_FALLBACK_COLOR + (255,))
