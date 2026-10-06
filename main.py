@@ -61,6 +61,7 @@ async def build_application() -> Application:
             CommandHandler('bulk', plan_handlers.bulk_text_command),
         ],
         states={
+            plan_handlers.ASKING_PLAN_DATE: [CallbackQueryHandler(plan_handlers.set_plan_date)],
             plan_handlers.ASKING_WAKE_TIME: [CallbackQueryHandler(plan_handlers.set_wake_time)],
             plan_handlers.ASKING_SLEEP_TIME: [CallbackQueryHandler(plan_handlers.set_sleep_time)],
             plan_handlers.ASKING_MODE: [CallbackQueryHandler(plan_handlers.set_mode)],

@@ -33,10 +33,52 @@ ASKING_COGNITIVE_LOAD = 9
 CONFIRMING_PLAN = 10
 EDITING_TASK = 11
 
+ASKING_PLAN_DATE = 12
+
 FINISH_KEYWORDS = {"اتمام", "تمام", "پایان", "تموم", "ثبت", "finish", "done", "end"}
 
-
 async def new_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = [
+        [
+            InlineKeyboardButton("امروز", callback_data="date:today"),
+            InlineKeyboardButton("فردا", callback_data="date:tomorrow"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("📅 می‌خواهید برای چه روزی برنامه‌ریزی کنید؟", reply_markup=reply_markup)
+    return ASKING_PLAN_DATE
+
+async def set_plan_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    
+    val = query.data.split(":")[1]
+    import datetime
+    import zoneinfo
+    tz = zoneinfo.ZoneInfo(config.TIMEZONE)
+    now = datetime.datetime.now(tz)
+    
+    if val == "today":
+        context.user_data['plan_date'] = now.strftime('%Y-%m-%d')
+        # Skip wake time if it's already past 9:00 AM
+        if now.hour >= 9:
+            context.user_data['wake_time'] = now.strftime('%H:%M')
+            keyboard = [
+                [
+                    InlineKeyboardButton("22:00", callback_data="sleep:22:00"),
+                    InlineKeyboardButton("23:00", callback_data="sleep:23:00"),
+                    InlineKeyboardButton("00:00", callback_data="sleep:00:00"),
+                ],
+                [InlineKeyboardButton("⌨️ پیش‌فرض (23:00)", callback_data="sleep:23:00")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text("⏰ ساعت خواب امشب را انتخاب کنید:", reply_markup=reply_markup)
+            return ASKING_SLEEP_TIME
+    else:
+        tomorrow = now + datetime.timedelta(days=1)
+        context.user_data['plan_date'] = tomorrow.strftime('%Y-%m-%d')
+
+    # Ask wake time normally
     keyboard = [
         [
             InlineKeyboardButton("06:00", callback_data="wake:06:00"),
@@ -47,7 +89,7 @@ async def new_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         [InlineKeyboardButton("⌨️ پیش‌فرض (07:00)", callback_data="wake:07:00")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("⏰ ساعت بیداری امروز را انتخاب کنید:", reply_markup=reply_markup)
+    await query.edit_message_text(f"⏰ ساعت بیداری برای روز مورد نظر را انتخاب کنید:", reply_markup=reply_markup)
     return ASKING_WAKE_TIME
 
 
@@ -277,7 +319,7 @@ async def finish_planning(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     wake = context.user_data.get('wake_time', '07:00')
     sleep = context.user_data.get('sleep_time', '23:00')
     
-    date_str = scheduler_engine.get_today_date_str(config.TIMEZONE)
+    date_str = context.user_data.get('plan_date') or scheduler_engine.get_today_date_str(config.TIMEZONE)
     tz = config.TIMEZONE
     
     msg = update.message if update.message else update.callback_query.message
